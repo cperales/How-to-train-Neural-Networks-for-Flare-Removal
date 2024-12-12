@@ -17,7 +17,7 @@
 
 import tensorflow as tf
 
-from flare_removal.python import vgg
+import vgg
 
 
 class Vgg19Test(tf.test.TestCase):

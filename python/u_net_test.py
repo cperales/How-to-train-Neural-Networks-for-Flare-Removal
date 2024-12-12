@@ -16,7 +16,7 @@
 """Tests the `u_net` module."""
 import tensorflow as tf
 
-from flare_removal.python import u_net
+import u_net
 
 
 class UNetTest(tf.test.TestCase):

@@ -18,6 +18,7 @@ import os.path
 
 import cv2
 import numpy as np
+from PIL import Image
 import skimage
 import skimage.morphology
 import tensorflow as tf
@@ -28,9 +29,27 @@ from tensorflow_addons.utils import types as tfa_types
 _EPS = 1e-7
 
 
+def tensor_to_device(tensor, device='cpu'):
+  dev_dict = {'cpu': '/CPU:0', 'gpu': '/GPU:0'}
+  with tf.device(dev_dict[device]):
+    tensor_on_cpu = tf.identity(tensor) 
+  return tensor_on_cpu
+
+
+def save_image(tensor, folder, filename, squeeze=False):
+    # Convert the tensor to a NumPy array
+    array = tensor.numpy() if not squeeze else tensor[0].numpy()
+    # Normalize and convert to uint8 (0-255 range)
+    array = (array * 255).astype(np.uint8)
+    # Create a PIL Image object
+    image = Image.fromarray(array)
+    # Save the image to disk
+    image.save(os.path.join(folder, filename))
+
+
 def _gaussian_kernel(kernel_size, sigma, n_channels,
                      dtype):
-  x = tf.range(-kernel_size // 2 + 1, kernel_size // 2 + 1, dtype=dtype)
+  x = tf.cast(tf.range(-kernel_size // 2 + 1, kernel_size // 2 + 1), dtype)
   g = tf.math.exp(-(tf.pow(x, 2) / (2 * tf.pow(tf.cast(sigma, dtype), 2))))
   g_norm2d = tf.pow(tf.reduce_sum(g), 2)
   g_kernel = tf.tensordot(g, g, axes=0) / g_norm2d
@@ -75,7 +94,7 @@ def remove_flare(combined, flare, gamma = 2.2):
 def quantize_8(image):
   """Converts and quantizes an image to 2^8 discrete levels in [0, 1]."""
   q8 = tf.image.convert_image_dtype(image, tf.uint8, saturate=True)
-  return tf.cast(q8, tf.float32) * (1.0 / 255.0)
+  return tf.cast(q8, image.dtype) * (1.0 / 255.0)
 
 
 def write_image(image, path, overwrite = True):
@@ -147,8 +166,8 @@ def scales_to_projective_transforms(scales, height,
   scales = tf.convert_to_tensor(scales)
   if tf.rank(scales) == 1:
     scales = scales[None, :]
-  scales_x = tf.reshape(scales[:, 0], (-1, 1))
-  scales_y = tf.reshape(scales[:, 1], (-1, 1))
+  scales_x = tf.reshape(scales[0, :], (-1, 1))
+  scales_y = tf.reshape(scales[1, :], (-1, 1))
   zeros = tf.zeros_like(scales_x)
   transform = tf.concat(
       [scales_x, zeros, zeros, zeros, scales_y, zeros, zeros, zeros], axis=-1)
@@ -175,8 +194,8 @@ def shears_to_projective_transforms(shears, height,
   shears = tf.convert_to_tensor(shears)
   if tf.rank(shears) == 1:
     shears = shears[None, :]
-  shears_x = tf.reshape(tf.tan(shears[:, 0]), (-1, 1))
-  shears_y = tf.reshape(tf.tan(shears[:, 1]), (-1, 1))
+  shears_x = tf.reshape(tf.tan(shears[0, :]), (-1, 1))
+  shears_y = tf.reshape(tf.tan(shears[1, :]), (-1, 1))
   ones = tf.ones_like(shears_x)
   zeros = tf.zeros_like(shears_x)
   transform = tf.concat(
@@ -221,7 +240,7 @@ def apply_affine_transform(image,
   shear = shears_to_projective_transforms([shear_x, shear_y], height, width)
   scaling = scales_to_projective_transforms([scale_x, scale_y], height, width)
   translation = tfa_image.translations_to_projective_transforms(
-      [shift_x, shift_y])
+      tf.transpose([shift_x, shift_y]))
 
   t = tfa_image.compose_transforms([rotation, shear, scaling, translation])
   transformed = tfa_image.transform(image, t, interpolation=interpolation)
@@ -230,8 +249,7 @@ def apply_affine_transform(image,
 
 
 def get_highlight_mask(im,
-                       threshold = 0.99,
-                       dtype = tf.float32):
+                       threshold = 0.99):
   """Returns a binary mask indicating the saturated regions in the input image.
 
   Args:
@@ -244,7 +262,7 @@ def get_highlight_mask(im,
     A `dtype` tensor with shape [H, W, 1] or [B, H, W, 1].
   """
   binary_mask = tf.reduce_mean(im, axis=-1, keepdims=True) > threshold
-  mask = tf.cast(binary_mask, dtype)
+  mask = tf.cast(binary_mask, im.dtype)
   return mask
 
 

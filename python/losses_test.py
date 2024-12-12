@@ -16,7 +16,7 @@
 """Tests the `losses` module."""
 import tensorflow as tf
 
-from flare_removal.python import losses
+import losses
 
 
 class PerceptualLossTest(tf.test.TestCase):

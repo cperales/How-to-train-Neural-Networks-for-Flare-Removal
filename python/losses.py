@@ -18,7 +18,7 @@ from typing import Callable, Dict, Mapping, Optional, Union
 
 import tensorflow as tf
 
-from flare_removal.python import vgg
+import vgg
 
 
 def get_loss(name):

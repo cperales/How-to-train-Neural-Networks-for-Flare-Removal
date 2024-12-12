@@ -15,20 +15,20 @@
 
 """Models for flare removal."""
 
-from flare_removal.python import u_net
-from flare_removal.python import vgg
+import u_net
+import vgg
 
 
-def build_model(model_type, batch_size):
+def build_model(model_type, res=[512, 512]):
   """Returns a Keras model specified by name."""
   if model_type == 'unet':
     return u_net.get_model(
-        input_shape=(512, 512, 3),
+        input_shape=(*res, 3),
         scales=4,
         bottleneck_depth=1024,
         bottleneck_layers=2)
   elif model_type == 'can':
     return vgg.build_can(
-        input_shape=(512, 512, 3), conv_channels=64, out_channels=3)
+        input_shape=(*res, 3), conv_channels=64, out_channels=3)
   else:
     raise ValueError(model_type)

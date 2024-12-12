@@ -52,8 +52,8 @@ from absl import flags
 import tensorflow as tf
 import tqdm
 
-from flare_removal.python import models
-from flare_removal.python import utils
+import models
+import utils
 
 FLAGS = flags.FLAGS
 
