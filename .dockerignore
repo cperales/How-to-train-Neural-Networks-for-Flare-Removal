@@ -1,0 +1,5 @@
+# Folders
+eval_logs*
+train_logs*
+train_images*
+val_images*
