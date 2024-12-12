@@ -49,7 +49,7 @@ def save_image(tensor, folder, filename, squeeze=False):
 
 def _gaussian_kernel(kernel_size, sigma, n_channels,
                      dtype):
-  x = tf.cast(tf.range(-kernel_size // 2 + 1, kernel_size // 2 + 1), dtype)
+  x = tf.range(-kernel_size // 2 + 1, kernel_size // 2 + 1, dtype=dtype)
   g = tf.math.exp(-(tf.pow(x, 2) / (2 * tf.pow(tf.cast(sigma, dtype), 2))))
   g_norm2d = tf.pow(tf.reduce_sum(g), 2)
   g_kernel = tf.tensordot(g, g, axes=0) / g_norm2d
@@ -94,7 +94,7 @@ def remove_flare(combined, flare, gamma = 2.2):
 def quantize_8(image):
   """Converts and quantizes an image to 2^8 discrete levels in [0, 1]."""
   q8 = tf.image.convert_image_dtype(image, tf.uint8, saturate=True)
-  return tf.cast(q8, image.dtype) * (1.0 / 255.0)
+  return tf.cast(q8, tf.float32) * (1.0 / 255.0)
 
 
 def write_image(image, path, overwrite = True):
@@ -249,7 +249,8 @@ def apply_affine_transform(image,
 
 
 def get_highlight_mask(im,
-                       threshold = 0.99):
+                       threshold = 0.99,
+                       dtype = tf.float32):
   """Returns a binary mask indicating the saturated regions in the input image.
 
   Args:
@@ -262,7 +263,7 @@ def get_highlight_mask(im,
     A `dtype` tensor with shape [H, W, 1] or [B, H, W, 1].
   """
   binary_mask = tf.reduce_mean(im, axis=-1, keepdims=True) > threshold
-  mask = tf.cast(binary_mask, im.dtype)
+  mask = tf.cast(binary_mask, dtype)
   return mask
 
 

@@ -26,8 +26,7 @@ def image_dataset_from_files(data_dir,
                              image_shape,
                              batch_size = 0,
                              shuffle = True,
-                             repeat = -1,
-                             half_precision = False):
+                             repeat = -1):
   """Loads images from individual JPG or PNG files.
 
   Args:
@@ -45,7 +44,6 @@ def image_dataset_from_files(data_dir,
   Returns:
     A Dataset object containing (H, W, C) or (B, H, W, C) image tensors.
   """
-  tf_dtype = tf.float16 if half_precision else tf.float32
   extensions = ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG']
   # Images directly under the given directory.
   globs = [os.path.join(data_dir, f'*.{e}') for e in extensions]
@@ -55,7 +53,7 @@ def image_dataset_from_files(data_dir,
 
   def _parser(file_name):
     blob = tf.io.read_file(file_name)
-    image = tf.io.decode_image(blob, dtype=tf_dtype)
+    image = tf.io.decode_image(blob, dtype=tf.float32)
     image.set_shape(image_shape)
     return image
 
@@ -80,8 +78,7 @@ def image_dataset_from_tfrecords(globs,
                                  image_shape,
                                  batch_size = 0,
                                  shuffle = True,
-                                 repeat = -1,
-                                 half_precision = False):
+                                 repeat = -1):
   """Loads images from sharded TFRecord files.
 
   Args:
@@ -98,8 +95,6 @@ def image_dataset_from_tfrecords(globs,
   Returns:
     A Dataset object containing (H, W, C) or (B, H, W, C) image tensors.
   """
-  tf_dtype = tf.float16 if half_precision else tf.float32
-
   files = tf.data.Dataset.list_files(globs, shuffle, seed=0)
   examples = files.interleave(
       tf.data.TFRecordDataset,
@@ -115,8 +110,8 @@ def image_dataset_from_tfrecords(globs,
         example, features={tag: tf.io.FixedLenFeature([], tf.string)})
     image_u8 = tf.reshape(
         tf.io.decode_raw(features[tag], tf.uint8), image_shape)
-    image_tensor = tf.image.convert_image_dtype(image_u8, tf_dtype)
-    return image_tensor
+    image_f32 = tf.image.convert_image_dtype(image_u8, tf.float32)
+    return image_f32
 
   images = examples.map(
       _parser, num_parallel_calls=tf.data.AUTOTUNE, deterministic=not shuffle)
@@ -137,10 +132,8 @@ def image_dataset_from_tfrecords(globs,
 def get_scene_dataset(path,
                       source,
                       batch_size,
-                      input_shape = (682, 1024, 3),
-                      repeat = 0,
-                      shuffle=True,
-                      half_precision=False):
+                      input_shape = (640, 640, 3),
+                      repeat = 0):
   """Returns scene images according to configuration."""
   if source == 'tfrecord':
     return image_dataset_from_tfrecords(
@@ -148,17 +141,14 @@ def get_scene_dataset(path,
         tag='image',
         image_shape=input_shape,
         batch_size=batch_size,
-        repeat=repeat,
-        half_precision=half_precision)
+        repeat=repeat)
 
   elif source == 'jpg':
     return image_dataset_from_files(
         data_dir=path,
         image_shape=input_shape,
         batch_size=batch_size,
-        repeat=repeat,
-        shuffle=shuffle,
-        half_precision=half_precision)
+        repeat=repeat)
 
   else:
     raise ValueError('Unrecognized data source', source)
@@ -168,8 +158,7 @@ def get_flare_dataset(path,
                       source,
                       batch_size,
                       input_shape = (752, 1008, 3),
-                      repeat = -1,
-                      half_precision=False):
+                      repeat = -1):
   """Returns flare images according to configuration."""
   if source == 'tfrecord':
     return image_dataset_from_tfrecords(
@@ -177,16 +166,14 @@ def get_flare_dataset(path,
         tag='flare',
         image_shape=input_shape,
         batch_size=batch_size,
-        repeat=repeat,
-        half_precision=half_precision)
+        repeat=repeat)
 
   elif source == 'jpg':
     return image_dataset_from_files(
         data_dir=path,
         image_shape=input_shape,
         batch_size=batch_size,
-        repeat=repeat,
-        half_precision=half_precision)
+        repeat=repeat)
 
   else:
     raise ValueError('Unrecognized data source', source)
