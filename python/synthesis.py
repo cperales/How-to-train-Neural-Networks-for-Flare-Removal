@@ -225,26 +225,18 @@ def run_step(scene,
 def run_step_wo_flare(combined,
              model,
              training_res = [512, 512]):
-  """Executes a forward step."""
-  original_shape = scene.shape[1:3]
+  """Executes a forward step, without the loss."""
+  original_shape = combined.shape[1:3]
+
+  combined = tf.image.resize_with_crop_or_pad(combined,
+                                              target_height=training_res[0],
+                                              target_width=training_res[1])
 
   pred_scene = model(combined)
 
   if original_shape[0] < training_res[0] or original_shape[1] < training_res[1]:
     # Readjust shapes
-    combined = tf.image.resize_with_crop_or_pad(combined,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
     pred_scene = tf.image.resize_with_crop_or_pad(pred_scene,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    scene = tf.image.resize_with_crop_or_pad(scene,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    pred_flare = tf.image.resize_with_crop_or_pad(pred_flare,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    flare = tf.image.resize_with_crop_or_pad(flare,
                                               target_height=original_shape[0],
                                               target_width=original_shape[1])
 

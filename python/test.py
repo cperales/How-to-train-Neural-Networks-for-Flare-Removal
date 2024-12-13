@@ -23,15 +23,14 @@ from absl import logging
 import tensorflow as tf
 
 import data_provider
-import losses
 import models
-import utils
 import synthesis
 from time import perf_counter
+import utils
 
 
 flags.DEFINE_string(
-    'test_dir', '/tmp/eval',
+    'out_dir', '/tmp/out',
     'Directory where outputs are written.')
 flags.DEFINE_string(
     'train_dir', '/tmp/train',
@@ -44,45 +43,40 @@ flags.DEFINE_enum(
     'Source of training data. Use "jpg" for individual image files, such as '
     'JPG and PNG images. Use "tfrecord" for pre-baked sharded TFRecord files.')
 flags.DEFINE_string('model', 'unet', 'the name of the training model')
-flags.DEFINE_string('loss', 'percep', 'the name of the loss for training')
 flags.DEFINE_integer('batch_size', 2, 'Evaluation batch size.')
-flags.DEFINE_float(
-    'learning_rate', 1e-4,
-    'Unused placeholder. The flag has to be defined to satisfy parameter sweep '
-    'requirements.')
-flags.DEFINE_float('flare_loss_weight', 1.0,
-                   'Weight added on the flare loss (scene loss is 1).')
-flags.DEFINE_integer('training_res', 512,
-                     'Image resolution at which the network is trained.')
+flags.DEFINE_list('training_res', [512, 512], 'Training resolution.')
 FLAGS = flags.FLAGS
 
 
 def main(_):
+  out_dir = FLAGS.out_dir
+  assert out_dir, 'Flag --out_dir must not be empty.'
+  image_dir = FLAGS.image_dir
+  assert image_dir, 'Flag --image_dir must not be empty.'
+  os.makedirs(out_dir, exist_ok=True)
   train_dir = FLAGS.train_dir
   assert train_dir, 'Flag --train_dir must not be empty.'
-  test_dir = FLAGS.test_dir
-  os.makedirs(os.path.join(test_dir, 'target'), exist_ok=True)
-  os.makedirs(os.path.join(test_dir, 'pred'), exist_ok=True)
+
+  # Check training resolution
+  if len(FLAGS.training_res) == 1:
+    r = FLAGS.training_res[0]
+    training_res = 2 * [int(r)]
+  else:
+    training_res = [int(r) for r in FLAGS.training_res]
 
   # Load data.
   images = data_provider.get_scene_dataset(
-      FLAGS.image_dir, FLAGS.data_source, FLAGS.batch_size, repeat=0)
+      FLAGS.image_dir, FLAGS.data_source, FLAGS.batch_size, repeat=0, shuffle=False,
+      input_shape=(682, 1024, 3))
 
   # Make a model.
-  model = models.build_model(FLAGS.model, FLAGS.batch_size)
-  loss_fn = losses.get_loss(FLAGS.loss)
+  model = models.build_model(FLAGS.model, training_res)
 
   ckpt = tf.train.Checkpoint(
       step=tf.Variable(0, dtype=tf.int64),
       training_finished=tf.Variable(False, dtype=tf.bool),
       model=model)
 
-
-  # The checkpoints_iterator keeps polling the latest training checkpoints,
-  # until:
-  #   1) `timeout` seconds have passed waiting for a new checkpoint; and
-  #   2) `timeout_fn` (in this case, the flag indicating the last training
-  #      checkpoint) evaluates to true.
   for ckpt_path in tf.train.checkpoints_iterator(
       train_dir, timeout=30, timeout_fn=lambda: ckpt.training_finished):
     try:
@@ -97,23 +91,24 @@ def main(_):
     except (tf.errors.NotFoundError, AssertionError):
       logging.exception('Failed to restore checkpoint from %s.', ckpt_path)
       continue
-    
+
     start = perf_counter()
     counter = 0
     for image in images:
-      pred_image = synthesis.run_step_wo_flare(
+      pred_scene = synthesis.run_step_wo_flare(
           image,
           model,
-          training_res=FLAGS.training_res)
+          training_res=training_res)
       for i in range(FLAGS.batch_size):
         counter += 1
-        utils.save_image(image[i],
-                         folder=os.path.join(FLAGS.test_dir, "target"),
-                         filename=str(counter) + '.jpg')
-        utils.save_image(pred_image[i],
-                         folder=os.path.join(FLAGS.test_dir, "pred"),
-                         filename=str(counter) + '_pred.jpg')
 
+        image_i = tf.concat([pred_scene[i],
+                            image[i]],
+                  axis=1)
+
+        utils.save_image(image_i, out_dir, str(counter) + '_combined.jpg')
+
+  logging.info('%i images', counter)
   logging.info('Done!')
   end = perf_counter()
   time_elapsed = end - start
