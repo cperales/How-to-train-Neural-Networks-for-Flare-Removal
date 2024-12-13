@@ -168,6 +168,10 @@ cython_debug/
 *.png
 *.jpg
 
+# Compressed files
+*.tar.gz
+*.zip
+
 # Model checkpoints
 checkpoint
 ckpt-*
