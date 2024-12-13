@@ -133,7 +133,8 @@ def get_scene_dataset(path,
                       source,
                       batch_size,
                       input_shape = (640, 640, 3),
-                      repeat = 0):
+                      repeat = 0,
+                      shuffle=True):
   """Returns scene images according to configuration."""
   if source == 'tfrecord':
     return image_dataset_from_tfrecords(
@@ -148,6 +149,7 @@ def get_scene_dataset(path,
         data_dir=path,
         image_shape=input_shape,
         batch_size=batch_size,
+        shuffle=shuffle,
         repeat=repeat)
 
   else:
