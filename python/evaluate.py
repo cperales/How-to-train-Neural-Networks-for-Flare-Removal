@@ -84,7 +84,8 @@ def main(_):
 
   # Load data.
   scenes = data_provider.get_scene_dataset(
-      FLAGS.scene_dir, FLAGS.data_source, FLAGS.batch_size, repeat=0, input_shape=(682, 1024, 3))
+      FLAGS.scene_dir, FLAGS.data_source, FLAGS.batch_size, repeat=0,
+      input_shape=(682, 1024, 3), shuffle=False)
   flares = data_provider.get_flare_dataset(FLAGS.flare_dir, FLAGS.data_source,
                                            FLAGS.batch_size)
 
@@ -133,7 +134,7 @@ def main(_):
           noise=FLAGS.scene_noise,
           flare_max_gain=FLAGS.flare_max_gain,
           flare_loss_weight=FLAGS.flare_loss_weight,
-          training_res=FLAGS.training_res)
+          training_res=training_res)
       summary = tf.concat([summary_dict['combined'],
                            summary_dict['pred_scene'],
                            summary_dict['scene'],
