@@ -101,9 +101,10 @@ def main(_):
           training_res=training_res)
       for i in range(FLAGS.batch_size):
         counter += 1
-
-        image_i = tf.concat([pred_scene[i],
-                            image[i]],
+        diff = image[i] - pred_scene[i]
+        image_i = tf.concat([image[i],
+                             pred_scene[i],
+                             diff],
                   axis=1)
 
         utils.save_image(image_i, out_dir, str(counter) + '_combined.jpg')
