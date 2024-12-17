@@ -27,17 +27,6 @@ import os
 import numpy as np
 
 
-def show_image(tensor, squeeze=True):
-    # Convert the tensor to a NumPy array
-    array = tensor.numpy() if not squeeze else tensor[0].numpy()
-    # Normalize and convert to uint8 (0-255 range)
-    array = (array * 255).astype(np.uint8)
-    # Create a PIL Image object
-    image = Image.fromarray(array)
-    # Save the image to disk
-    image.show()
-
-
 def add_flare(scene,
               flare,
               noise,
@@ -97,19 +86,6 @@ def add_flare(scene,
         scale_y=scale[:, 1])
 
   flare_linear = tf.clip_by_value(flare_linear, 0.0, 1.0)
-
-  if training_res[0] < flare_linear.shape[0] and training_res[1] < flare_linear.shape[1]:
-    flare_linear = tf.image.crop_to_bounding_box(
-        flare_linear,
-        offset_height=(flare_input_height - training_res) // 2,
-        offset_width=(flare_input_width - training_res) // 2,
-        target_height=training_res,
-      target_width=training_res)
-  else:
-    flare_linear = tf.image.resize_with_crop_or_pad(flare_linear,
-                                                    target_height=training_res[0],
-                                                    target_width=training_res[1])
-
   flare_linear = tf.image.random_flip_left_right(
       tf.image.random_flip_up_down(flare_linear))
 
@@ -124,6 +100,17 @@ def add_flare(scene,
   offset = tf.random.uniform([], -0.02, 0.02, dtype=flare_linear.dtype)
   flare_linear = tf.clip_by_value(flare_linear + offset, 0.0, 1.0)
 
+  # Crop or pad
+  if training_res[0] < flare_linear.shape[0] and training_res[1] < flare_linear.shape[1]:
+    flare_linear = tf.image.crop_to_bounding_box(
+        flare_linear,
+        offset_height=(flare_input_height - training_res) // 2,
+        offset_width=(flare_input_width - training_res) // 2,
+        target_height=training_res,
+      target_width=training_res)
+  else:
+    flare_linear = utils.pad_tensor(flare_linear, training_res)
+
   flare_srgb = tf.image.adjust_gamma(flare_linear, 1.0 / gamma)
 
   # Scene augmentation: random crop and flips.
@@ -131,9 +118,8 @@ def add_flare(scene,
   if training_res[0] < flare_linear.shape[0] and training_res[1] < flare_linear.shape[1]:
     scene_linear = tf.image.random_crop(scene_linear, flare_linear.shape)
   else:
-    scene_linear = tf.image.resize_with_crop_or_pad(scene_linear,
-                                                    target_height=training_res[0],
-                                                    target_width=training_res[1])
+    scene_linear = utils.pad_tensor(scene_linear, training_res)
+
   # scene_linear = tf.image.random_flip_left_right(
   #     tf.image.random_flip_up_down(scene_linear))
 
@@ -178,6 +164,14 @@ def run_step(scene,
       training_res=training_res)
 
   pred_scene = model(combined)
+
+  # Readjust shapes
+  if original_shape[0] < training_res[0] or original_shape[1] < training_res[1]:
+    combined = utils.crop_tensor(combined, original_shape)
+    pred_scene = utils.crop_tensor(pred_scene, original_shape)
+    scene = utils.crop_tensor(scene, original_shape)
+    flare = utils.crop_tensor(flare, original_shape)
+
   pred_flare = utils.remove_flare(combined, pred_scene, gamma)
   
   flare_mask = utils.get_highlight_mask(flare)
@@ -188,24 +182,6 @@ def run_step(scene,
   if flare_loss_weight > 0:
     masked_flare = pred_flare * (1 - flare_mask) + flare * flare_mask
     loss_value += flare_loss_weight * loss_fn(flare, masked_flare)
-
-  if original_shape[0] < training_res[0] or original_shape[1] < training_res[1]:
-    # Readjust shapes
-    combined = tf.image.resize_with_crop_or_pad(combined,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    pred_scene = tf.image.resize_with_crop_or_pad(pred_scene,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    scene = tf.image.resize_with_crop_or_pad(scene,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    pred_flare = tf.image.resize_with_crop_or_pad(pred_flare,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    flare = tf.image.resize_with_crop_or_pad(flare,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
 
   # Metrics
   psnr_value = tf.image.psnr(scene, pred_scene, max_val=1)
@@ -228,20 +204,14 @@ def run_step_wo_flare(combined,
   """Executes a forward step, without the loss."""
   original_shape = combined.shape[1:3]
 
-  combined_adapted = tf.image.resize_with_crop_or_pad(combined,
-                                              target_height=training_res[0],
-                                              target_width=training_res[1])
+  combined_adapted = utils.pad_tensor(combined, training_res)
 
   pred_scene = model(combined_adapted)
   pred_flare = utils.remove_flare(combined_adapted, pred_scene, gamma=1.0)
 
   if original_shape[0] < training_res[0] or original_shape[1] < training_res[1]:
     # Readjust shapes
-    pred_scene = tf.image.resize_with_crop_or_pad(pred_scene,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
-    pred_flare = tf.image.resize_with_crop_or_pad(pred_flare,
-                                              target_height=original_shape[0],
-                                              target_width=original_shape[1])
+    pred_scene = utils.crop_tensor(pred_scene, original_shape)
+    pred_flare = utils.crop_tensor(pred_flare, original_shape)
 
   return pred_scene, combined, pred_flare

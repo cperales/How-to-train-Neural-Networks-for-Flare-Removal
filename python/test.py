@@ -78,7 +78,7 @@ def main(_):
       model=model)
 
   for ckpt_path in tf.train.checkpoints_iterator(
-      train_dir, timeout=30, timeout_fn=lambda: ckpt.training_finished):
+      train_dir, timeout=2, timeout_fn=lambda: ckpt.training_finished):
     try:
       status = ckpt.restore(ckpt_path)
       # Assert that all model variables are restored, but allow extra unmatched
@@ -107,6 +107,7 @@ def main(_):
                   axis=1)
 
         utils.save_image(image_i, out_dir, str(counter) + '_combined.jpg')
+    break
 
 
   logging.info('%i images', counter)

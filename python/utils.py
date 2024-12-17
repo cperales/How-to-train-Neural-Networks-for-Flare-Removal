@@ -29,6 +29,27 @@ from tensorflow_addons.utils import types as tfa_types
 _EPS = 1e-7
 
 
+def pad_tensor(tensor, new_shape):
+  tensor = random_crop(tensor, new_shape)
+  tensor_shape = tensor.shape[1:3]
+  paddings = [[0, 0],
+              [0, new_shape[0] - tensor_shape[0]],
+              [0, new_shape[1] - tensor_shape[1]],
+              [0, 0]]
+  return tf.pad(tensor, paddings, mode='REFLECT')
+
+
+def random_crop(tensor, new_shape):
+  tensor_shape = tensor.shape[1:3]
+  adjust_shape = [min(l, m) for l, m in zip(tensor_shape, new_shape)] + [3]
+  return tf.image.random_crop(tensor,
+                              size=[tensor.shape[0], *adjust_shape])
+
+
+def crop_tensor(tensor, new_shape):
+  return tensor[:, :new_shape[0], :new_shape[1], :]
+
+
 def save_tensor(tensor, filename="tensor_file.tfrecord"):
   # Serialize tensor to binary string
   tensor_binary = tf.io.serialize_tensor(tensor)
@@ -52,6 +73,17 @@ def tensor_to_device(tensor, device='cpu'):
   with tf.device(dev_dict[device]):
     tensor_on_cpu = tf.identity(tensor) 
   return tensor_on_cpu
+
+
+def show_image(tensor, squeeze=True):
+    # Convert the tensor to a NumPy array
+    array = tensor.numpy() if not squeeze else tensor[0].numpy()
+    # Normalize and convert to uint8 (0-255 range)
+    array = (array * 255).astype(np.uint8)
+    # Create a PIL Image object
+    image = Image.fromarray(array)
+    # Save the image to disk
+    image.show()
 
 
 def save_image(tensor, folder, filename, squeeze=False):
