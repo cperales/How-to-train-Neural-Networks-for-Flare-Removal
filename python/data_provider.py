@@ -16,6 +16,7 @@
 """Loads data from the dataset."""
 import os.path
 from typing import Iterable, Tuple, Union
+import utils
 
 import tensorflow as tf
 
@@ -95,35 +96,24 @@ def image_dataset_from_tfrecords(globs,
   Returns:
     A Dataset object containing (H, W, C) or (B, H, W, C) image tensors.
   """
-  files = tf.data.Dataset.list_files(globs, shuffle, seed=0)
-  examples = files.interleave(
-      tf.data.TFRecordDataset,
-      num_parallel_calls=tf.data.AUTOTUNE,
-      deterministic=not shuffle)
+  # Create a dataset of file paths
+  files = tf.data.Dataset.list_files(globs, shuffle=shuffle, seed=0)
 
-  if shuffle:
-    examples = examples.shuffle(
-        buffer_size=_SHUFFLE_BUFFER_SIZE, seed=0, reshuffle_each_iteration=True)
+  # Map the parsing function to the dataset of examples
+  images = files.map(
+      utils.load_tensor, num_parallel_calls=tf.data.AUTOTUNE, deterministic=not shuffle)
 
-  def _parser(example):
-    features = tf.io.parse_single_example(
-        example, features={tag: tf.io.FixedLenFeature([], tf.string)})
-    image_u8 = tf.reshape(
-        tf.io.decode_raw(features[tag], tf.uint8), image_shape)
-    image_f32 = tf.image.convert_image_dtype(image_u8, tf.float32)
-    return image_f32
-
-  images = examples.map(
-      _parser, num_parallel_calls=tf.data.AUTOTUNE, deterministic=not shuffle)
-
+  # Apply repeating
   if repeat < 0:
-    images = images.repeat()
+      images = images.repeat()
   elif repeat > 0:
-    images = images.repeat(repeat)
+      images = images.repeat(repeat)
 
+  # Apply batching
   if batch_size > 0:
-    images = images.batch(batch_size, drop_remainder=True)
+      images = images.batch(batch_size, drop_remainder=True)
 
+  # Prefetch for performance
   images = images.prefetch(tf.data.AUTOTUNE)
 
   return images
@@ -142,7 +132,8 @@ def get_scene_dataset(path,
         tag='image',
         image_shape=input_shape,
         batch_size=batch_size,
-        repeat=repeat)
+        repeat=repeat,
+        shuffle=shuffle)
 
   elif source == 'jpg':
     return image_dataset_from_files(

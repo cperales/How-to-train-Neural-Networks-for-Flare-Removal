@@ -178,6 +178,7 @@ ckpt-*
 variables
 *.index
 *.pb
+*.tfrecord
 
 # Tensorflow summary
 events.out.tfevents.*

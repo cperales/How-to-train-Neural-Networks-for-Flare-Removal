@@ -74,7 +74,7 @@ def main(_):
 
   ckpt = tf.train.Checkpoint(
       step=tf.Variable(0, dtype=tf.int64),
-      training_finished=tf.Variable(False, dtype=tf.bool),
+      training_finished=tf.Variable(True, dtype=tf.bool),
       model=model)
 
   for ckpt_path in tf.train.checkpoints_iterator(
@@ -95,19 +95,19 @@ def main(_):
     start = perf_counter()
     counter = 0
     for image in images:
-      pred_scene = synthesis.run_step_wo_flare(
+      pred_scene, combined, pred_flare = synthesis.run_step_wo_flare(
           image,
           model,
           training_res=training_res)
       for i in range(FLAGS.batch_size):
         counter += 1
-        diff = image[i] - pred_scene[i]
-        image_i = tf.concat([image[i],
+        image_i = tf.concat([combined[i],
                              pred_scene[i],
-                             diff],
+                             pred_flare[i]],
                   axis=1)
 
         utils.save_image(image_i, out_dir, str(counter) + '_combined.jpg')
+
 
   logging.info('%i images', counter)
   logging.info('Done!')

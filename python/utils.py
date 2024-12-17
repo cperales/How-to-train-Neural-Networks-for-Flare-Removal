@@ -29,6 +29,24 @@ from tensorflow_addons.utils import types as tfa_types
 _EPS = 1e-7
 
 
+def save_tensor(tensor, filename="tensor_file.tfrecord"):
+  # Serialize tensor to binary string
+  tensor_binary = tf.io.serialize_tensor(tensor)
+
+  # Save the serialized tensor to disk
+  tf.io.write_file(filename, tensor_binary)
+
+
+def load_tensor(filename="tensor_file.tfrecord", dtype=tf.float32):
+  # Read the serialized tensor from the file
+  tensor_binary = tf.io.read_file(filename)
+
+  # Deserialize back into a TensorFlow tensor
+  loaded_tensor = tf.io.parse_tensor(tensor_binary, out_type=dtype)
+
+  return loaded_tensor
+
+
 def tensor_to_device(tensor, device='cpu'):
   dev_dict = {'cpu': '/CPU:0', 'gpu': '/GPU:0'}
   with tf.device(dev_dict[device]):

@@ -70,7 +70,9 @@ def main(_):
   eval_dir = FLAGS.eval_dir
   assert eval_dir, 'Flag --eval_dir must not be empty.'
   eval_dir_images = os.path.join(eval_dir, 'images')
+  eval_dir_tfrecord = os.path.join(eval_dir, 'test')
   os.makedirs(eval_dir_images, exist_ok=True)
+  os.makedirs(eval_dir_tfrecord, exist_ok=True)
   train_dir = FLAGS.train_dir
   assert train_dir, 'Flag --train_dir must not be empty.'
   summary_dir = os.path.join(eval_dir, 'summary')
@@ -95,7 +97,7 @@ def main(_):
 
   ckpt = tf.train.Checkpoint(
       step=tf.Variable(0, dtype=tf.int64),
-      training_finished=tf.Variable(False, dtype=tf.bool),
+      training_finished=tf.Variable(True, dtype=tf.bool),
       model=model)
 
   summary_writer = tf.summary.create_file_writer(summary_dir)
@@ -106,7 +108,7 @@ def main(_):
   #   2) `timeout_fn` (in this case, the flag indicating the last training
   #      checkpoint) evaluates to true.
   for ckpt_path in tf.train.checkpoints_iterator(
-      train_dir, timeout=30, timeout_fn=lambda: ckpt.training_finished):
+      train_dir, timeout=2, timeout_fn=lambda: ckpt.training_finished):
     try:
       status = ckpt.restore(ckpt_path)
       # Assert that all model variables are restored, but allow extra unmatched
@@ -150,13 +152,14 @@ def main(_):
         for i in range(FLAGS.batch_size):
           counter += 1
           
-
-          image_i = tf.concat([summary_dict['combined'][i],
+          combined_i = summary_dict['combined'][i]
+          image_i = tf.concat([combined_i,
                                summary_dict['pred_scene'][i],
                                summary_dict['scene'][i]],
                     axis=1)
 
           utils.save_image(image_i, eval_dir_images, str(counter) + '_combined.jpg')
+          utils.save_tensor(combined_i, f"{eval_dir_tfrecord}/{str(counter)}.tfrecord")
       
   val_loss = tf.reduce_mean(tf.stack(val_loss_list))
   val_psnr = tf.reduce_mean(tf.stack(val_psnr_list))
